@@ -5,36 +5,20 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sys/unix"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	ignoredMountPoints = kingpin.Flag(
-		"collector.filesystem.ignored-mount-points",
-		"Regexp of mount points to ignore for filesystem collector.",
-	).Default(defIgnoredMountPoints).String()
-	ignoredFSTypes = kingpin.Flag(
-		"collector.filesystem.ignored-fs-types",
-		"Regexp of filesystem types to ignore for filesystem collector.",
-	).Default(defIgnoredFSTypes).String()
-
 	filesystemLabelNames = []string{"device", "mountpoint", "fstype"}
 )
 
 type filesystemCollector struct {
-	ignoredMountPointsPattern *regexp.Regexp
-	ignoredFSTypesPattern     *regexp.Regexp
-	usageDesc                 *prometheus.Desc
-	logger                    log.Logger
+	usageDesc *prometheus.Desc
 }
 
 type filesystemLabels struct {
@@ -49,10 +33,8 @@ type filesystemStats struct {
 }
 
 // NewFilesystemCollector returns a new Collector exposing filesystems stats.
-func NewFilesystemCollector(logger log.Logger) (Collector, error) {
+func NewFilesystemCollector() (Collector, error) {
 	subsystem := "disk"
-	mountPointPattern := regexp.MustCompile(*ignoredMountPoints)
-	filesystemsTypesPattern := regexp.MustCompile(*ignoredFSTypes)
 
 	usageDesc := prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, subsystem, "usage"),
@@ -61,10 +43,7 @@ func NewFilesystemCollector(logger log.Logger) (Collector, error) {
 	)
 
 	return &filesystemCollector{
-		ignoredMountPointsPattern: mountPointPattern,
-		ignoredFSTypesPattern:     filesystemsTypesPattern,
-		usageDesc:                 usageDesc,
-		logger:                    logger,
+		usageDesc: usageDesc,
 	}, nil
 }
 
@@ -92,59 +71,28 @@ func (c *filesystemCollector) Update(ch chan<- prometheus.Metric) error {
 			c.usageDesc, prometheus.GaugeValue,
 			100-s.avail/s.size*100, s.labels.device, s.labels.mountPoint, s.labels.fsType,
 		)
-
-		/*
-			ch <- prometheus.MustNewConstMetric(
-				c.sizeDesc, prometheus.GaugeValue,
-				s.size, s.labels.device, s.labels.mountPoint, s.labels.fsType,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				c.freeDesc, prometheus.GaugeValue,
-				s.free, s.labels.device, s.labels.mountPoint, s.labels.fsType,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				c.availDesc, prometheus.GaugeValue,
-				s.avail, s.labels.device, s.labels.mountPoint, s.labels.fsType,
-			)
-		*/
 	}
 	return nil
 }
 
-const (
-	defIgnoredMountPoints = "^/(dev|proc|sys|var/lib/docker/.+)($|/)"
-	defIgnoredFSTypes     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
-)
-
-var mountTimeout = kingpin.Flag("collector.filesystem.mount-timeout",
-	"how long to wait for a mount to respond before marking it as stale").
-	Hidden().Default("5s").Duration()
+var mountTimeout = 5 * time.Second // 5s
 var stuckMounts = make(map[string]struct{})
 var stuckMountsMtx = &sync.Mutex{}
 
 // GetStats returns filesystem stats.
 func (c *filesystemCollector) GetStats() ([]filesystemStats, error) {
-	mps, err := mountPointDetails(c.logger)
+	mps, err := mountPointDetails()
 	if err != nil {
 		return nil, err
 	}
 	stats := []filesystemStats{}
 	for _, labels := range mps {
-		if c.ignoredMountPointsPattern.MatchString(labels.mountPoint) {
-			level.Debug(c.logger).Log("msg", "Ignoring mount point", "mountpoint", labels.mountPoint)
-			continue
-		}
-		if c.ignoredFSTypesPattern.MatchString(labels.fsType) {
-			level.Debug(c.logger).Log("msg", "Ignoring fs", "type", labels.fsType)
-			continue
-		}
 		stuckMountsMtx.Lock()
 		if _, ok := stuckMounts[labels.mountPoint]; ok {
 			stats = append(stats, filesystemStats{
 				labels:      labels,
 				deviceError: 1,
 			})
-			level.Debug(c.logger).Log("msg", "Mount point is in an unresponsive state", "mountpoint", labels.mountPoint)
 			stuckMountsMtx.Unlock()
 			continue
 		}
@@ -153,7 +101,7 @@ func (c *filesystemCollector) GetStats() ([]filesystemStats, error) {
 		// The success channel is used do tell the "watcher" that the stat
 		// finished successfully. The channel is closed on success.
 		success := make(chan struct{})
-		go stuckMountWatcher(labels.mountPoint, success, c.logger)
+		go stuckMountWatcher(labels.mountPoint, success)
 
 		buf := new(unix.Statfs_t)
 		err = unix.Statfs(rootfsFilePath(labels.mountPoint), buf)
@@ -161,7 +109,6 @@ func (c *filesystemCollector) GetStats() ([]filesystemStats, error) {
 		close(success)
 		// If the mount has been marked as stuck, unmark it and log it's recovery.
 		if _, ok := stuckMounts[labels.mountPoint]; ok {
-			level.Debug(c.logger).Log("msg", "Mount point has recovered, monitoring will resume", "mountpoint", labels.mountPoint)
 			delete(stuckMounts, labels.mountPoint)
 		}
 		stuckMountsMtx.Unlock()
@@ -172,7 +119,6 @@ func (c *filesystemCollector) GetStats() ([]filesystemStats, error) {
 				deviceError: 1,
 			})
 
-			level.Debug(c.logger).Log("msg", "Error on statfs() system call", "rootfs", rootfsFilePath(labels.mountPoint), "err", err)
 			continue
 		}
 
@@ -200,29 +146,27 @@ func (c *filesystemCollector) GetStats() ([]filesystemStats, error) {
 // stuckMountWatcher listens on the given success channel and if the channel closes
 // then the watcher does nothing. If instead the timeout is reached, the
 // mount point that is being watched is marked as stuck.
-func stuckMountWatcher(mountPoint string, success chan struct{}, logger log.Logger) {
+func stuckMountWatcher(mountPoint string, success chan struct{}) {
 	select {
 	case <-success:
 		// Success
-	case <-time.After(*mountTimeout):
+	case <-time.After(mountTimeout):
 		// Timed out, mark mount as stuck
 		stuckMountsMtx.Lock()
 		select {
 		case <-success:
 			// Success came in just after the timeout was reached, don't label the mount as stuck
 		default:
-			level.Debug(logger).Log("msg", "Mount point timed out, it is being labeled as stuck and will not be monitored", "mountpoint", mountPoint)
 			stuckMounts[mountPoint] = struct{}{}
 		}
 		stuckMountsMtx.Unlock()
 	}
 }
 
-func mountPointDetails(logger log.Logger) ([]filesystemLabels, error) {
+func mountPointDetails() ([]filesystemLabels, error) {
 	file, err := os.Open(procFilePath("1/mounts"))
 	if os.IsNotExist(err) {
 		// Fallback to `/proc/mounts` if `/proc/1/mounts` is missing due hidepid.
-		level.Debug(logger).Log("msg", "Reading root mounts failed, falling back to system mounts", "err", err)
 		file, err = os.Open(procFilePath("mounts"))
 	}
 	if err != nil {

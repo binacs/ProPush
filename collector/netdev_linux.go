@@ -9,28 +9,24 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 type netDevCollector struct {
 	subsystem   string
 	metricDescs map[string]*prometheus.Desc
-	logger      log.Logger
 }
 
 // NewNetDevCollector returns a new Collector exposing network device stats.
-func NewNetDevCollector(logger log.Logger) (Collector, error) {
+func NewNetDevCollector() (Collector, error) {
 	return &netDevCollector{
 		subsystem:   "network",
 		metricDescs: map[string]*prometheus.Desc{},
-		logger:      logger,
 	}, nil
 }
 
 func (c *netDevCollector) Update(ch chan<- prometheus.Metric) error {
-	netDev, err := getNetDevStats(nil, nil, c.logger)
+	netDev, err := getNetDevStats(nil, nil)
 	if err != nil {
 		return fmt.Errorf("couldn't get netstats: %s", err)
 	}
@@ -62,7 +58,7 @@ func (c *netDevCollector) Update(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, c.subsystem, "netio"),
-			"Network I/O.",
+			"Network I/O (Bytes).",
 			nil,
 			nil,
 		), prometheus.GaugeValue, res)
@@ -75,17 +71,17 @@ var (
 	procNetDevFieldSep    = regexp.MustCompile(` +`)
 )
 
-func getNetDevStats(ignore *regexp.Regexp, accept *regexp.Regexp, logger log.Logger) (map[string]map[string]string, error) {
+func getNetDevStats(ignore *regexp.Regexp, accept *regexp.Regexp) (map[string]map[string]string, error) {
 	file, err := os.Open(procFilePath("net/dev"))
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	return parseNetDevStats(file, ignore, accept, logger)
+	return parseNetDevStats(file, ignore, accept)
 }
 
-func parseNetDevStats(r io.Reader, ignore *regexp.Regexp, accept *regexp.Regexp, logger log.Logger) (map[string]map[string]string, error) {
+func parseNetDevStats(r io.Reader, ignore *regexp.Regexp, accept *regexp.Regexp) (map[string]map[string]string, error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Scan() // skip first header
 	scanner.Scan()
@@ -109,11 +105,9 @@ func parseNetDevStats(r io.Reader, ignore *regexp.Regexp, accept *regexp.Regexp,
 
 		dev := parts[1]
 		if ignore != nil && ignore.MatchString(dev) {
-			level.Debug(logger).Log("msg", "Ignoring device", "device", dev)
 			continue
 		}
 		if accept != nil && !accept.MatchString(dev) {
-			level.Debug(logger).Log("msg", "Ignoring device", "device", dev)
 			continue
 		}
 

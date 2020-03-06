@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/procfs"
 )
@@ -23,22 +22,18 @@ var (
 )
 
 type cpuCollector struct {
-	fs       procfs.FS
-	cpu      *prometheus.Desc
-	cpuInfo  *prometheus.Desc
-	cpuGuest *prometheus.Desc
-	logger   log.Logger
+	fs  procfs.FS
+	cpu *prometheus.Desc
 }
 
-func NewCPUCollector(logger log.Logger) (Collector, error) {
+func NewCPUCollector() (Collector, error) {
 	fs, err := procfs.NewFS("/proc") // proc: default path
 	if err != nil {
 		return nil, fmt.Errorf("failed to open procfs: %w", err)
 	}
 	return &cpuCollector{
-		fs:     fs,
-		cpu:    nodeCPUSecondsDesc,
-		logger: logger,
+		fs:  fs,
+		cpu: nodeCPUSecondsDesc,
 	}, nil
 }
 

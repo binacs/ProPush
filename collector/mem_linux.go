@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -19,12 +17,11 @@ const (
 )
 
 type meminfoCollector struct {
-	logger log.Logger
 }
 
 // NewMeminfoCollector returns a new Collector exposing memory stats.
-func NewMeminfoCollector(logger log.Logger) (Collector, error) {
-	return &meminfoCollector{logger}, nil
+func NewMeminfoCollector() (Collector, error) {
+	return &meminfoCollector{}, nil
 }
 
 // Update calls (*meminfoCollector).getMemInfo to get the platform specific
@@ -34,7 +31,6 @@ func (c *meminfoCollector) Update(ch chan<- prometheus.Metric) error {
 	if err != nil {
 		return fmt.Errorf("couldn't get meminfo: %s", err)
 	}
-	level.Debug(c.logger).Log("msg", "Set node_mem", "memInfo", memInfo)
 
 	usage := 100 - (memInfo["MemFree_bytes"]+memInfo["Cached_bytes"]+memInfo["Buffers_bytes"])/memInfo["MemTotal_bytes"]*100
 
