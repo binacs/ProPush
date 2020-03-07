@@ -2,7 +2,7 @@ package collector
 
 import (
 	"fmt"
-	"strconv"
+	//"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,7 +17,7 @@ var (
 	nodeCPUSecondsDesc = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, cpuCollectorSubsystem, "usage"),
 		"Usage of the cpus in 100ms.",
-		[]string{"cpu", "intervel"}, nil,
+		[]string{"intervel"}, nil,
 	)
 )
 
@@ -57,10 +57,9 @@ func (c *cpuCollector) updateStat(ch chan<- prometheus.Metric) error {
 	if len(statsE.CPU) < len(statsS.CPU) {
 		return nil
 	}
-
+	var totalUsage, len float64
 	for cpuID, cpuStatS := range statsS.CPU {
 		cpuStatE := statsE.CPU[cpuID]
-		cpuNum := strconv.Itoa(cpuID)
 		totalS := cpuStatS.User + cpuStatS.Nice + cpuStatS.System + cpuStatS.Idle + cpuStatS.Iowait + cpuStatS.IRQ + cpuStatS.SoftIRQ
 		totalE := cpuStatE.User + cpuStatE.Nice + cpuStatE.System + cpuStatE.Idle + cpuStatE.Iowait + cpuStatE.IRQ + cpuStatE.SoftIRQ
 		var usage float64
@@ -69,8 +68,25 @@ func (c *cpuCollector) updateStat(ch chan<- prometheus.Metric) error {
 		} else {
 			usage = 100 - (cpuStatE.Idle-cpuStatS.Idle)/(totalE-totalS)*100
 		}
-		ch <- prometheus.MustNewConstMetric(c.cpu, prometheus.CounterValue, usage, cpuNum, "100ms")
+		totalUsage += usage
+		len += 1
 	}
-
+	totalUsage /= len
+	ch <- prometheus.MustNewConstMetric(c.cpu, prometheus.CounterValue, totalUsage, "100ms")
+	/*
+		for cpuID, cpuStatS := range statsS.CPU {
+			cpuStatE := statsE.CPU[cpuID]
+			cpuNum := strconv.Itoa(cpuID)
+			totalS := cpuStatS.User + cpuStatS.Nice + cpuStatS.System + cpuStatS.Idle + cpuStatS.Iowait + cpuStatS.IRQ + cpuStatS.SoftIRQ
+			totalE := cpuStatE.User + cpuStatE.Nice + cpuStatE.System + cpuStatE.Idle + cpuStatE.Iowait + cpuStatE.IRQ + cpuStatE.SoftIRQ
+			var usage float64
+			if cpuStatE.Idle == cpuStatS.Idle {
+				usage = 0
+			} else {
+				usage = 100 - (cpuStatE.Idle-cpuStatS.Idle)/(totalE-totalS)*100
+			}
+			ch <- prometheus.MustNewConstMetric(c.cpu, prometheus.CounterValue, usage, cpuNum, "100ms")
+		}
+	*/
 	return nil
 }

@@ -32,7 +32,6 @@ func (c *netDevCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 	var res float64
 	for _, devStats := range netDev {
-		fmt.Println()
 		for key, value := range devStats {
 			if key != "receive_bytes" && key != "transmit_bytes" {
 				continue
@@ -55,10 +54,12 @@ func (c *netDevCollector) Update(ch chan<- prometheus.Metric) error {
 			//ch <- prometheus.MustNewConstMetric(desc, prometheus.CounterValue, v, dev)
 		}
 	}
+	// Bytes => MB
+	res = res / 1024 / 1024
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, c.subsystem, "netio"),
-			"Network I/O (Bytes).",
+			"Network I/O (MB).",
 			nil,
 			nil,
 		), prometheus.GaugeValue, res)

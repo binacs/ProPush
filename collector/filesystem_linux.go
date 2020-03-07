@@ -67,6 +67,9 @@ func (c *filesystemCollector) Update(ch chan<- prometheus.Metric) error {
 		if s.labels.mountPoint != "/" {
 			continue
 		}
+		if s.labels.device[0] != '/' {
+			continue
+		}
 		ch <- prometheus.MustNewConstMetric(
 			c.usageDesc, prometheus.GaugeValue,
 			100-s.avail/s.size*100, s.labels.device, s.labels.mountPoint, s.labels.fsType,
