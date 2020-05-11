@@ -1,12 +1,7 @@
-BUILD_TAGS?=
-BUILD_FLAGS = -ldflags "-X github.com/BinacsLee/ProPush/version.GitCommit=`git rev-parse HEAD`"
+all: simple systemd
 
-all: build install
+simple:
+	go build -o bin/propush ./example/simple
 
-build:
-	go build $(BUILD_FLAGS) -tags '$(BUILD_TAGS)' -o bin/propush ./cmd
-
-install:
-	go install $(BUILD_FLAGS) -tags '$(BUILD_TAGS)' ./cmd
-
-
+systemd:
+	go build -o bin/propushd ./example/systemd
