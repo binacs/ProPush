@@ -1,0 +1,19 @@
+version: '3.1'
+
+services:
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus
+    command: --web.listen-address=0.0.0.0:9000 --web.enable-lifecycle --config.file=/etc/prometheus/prometheus.yml
+    restart: always
+    network_mode: host
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  pushgateway:
+    container_name: pushgateway
+    image: prom/pushgateway
+    command: --web.listen-address 0.0.0.0:8889
+    restart: always 
+    ports:
+      - 8889:8889
