@@ -1,5 +1,5 @@
 # ProPush
-Collect host CPU, memory, hard disk and network card traffic data in Prometheus data format and realize active statistical reporting.
+Collect host CPU, Memory, Hard disk and Network card traffic data in Prometheus data format and realize active statistical reporting.
 
 The core code is located in the collector directory. You can learn how to use ProPush with cmd/main.go.
 
@@ -66,6 +66,7 @@ ins.PushMetrics("http://127.0.0.1:9091", ins.GetMetrics())
 
 ## Advanced
 
-You can combine the ordered map to implement the regular deletion strategy of expired metrics.
+You can combine the [ordered map](https://github.com/binacsgo/treemap) to implement the regular deletion strategy of expired metrics.
 
 A more elegant and generic solution for this will be updated in the near future.
+
