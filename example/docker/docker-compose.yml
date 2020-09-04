@@ -9,6 +9,7 @@ services:
     network_mode: host
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      # rules
 
   pushgateway:
     container_name: pushgateway

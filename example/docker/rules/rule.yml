@@ -1,0 +1,31 @@
+groups:
+#channel 粒度的告警规则
+- name: crule
+  rules:
+  - alert: "crule1"
+    expr: "expr"
+    for: 1s
+    labels:
+      serverity: warning
+      cname: dtalk,log
+      nodeid: "test_nodeid"
+      ruleid: 1
+      typeid: 1
+      to: mail....
+      userid: userid
+    annotations:
+      summary: "summary crule1"
+      description: "desc crule1"
+  - alert: "crule2"
+    expr: expr
+    for: 5s
+    labels:
+      serverity: warning
+      cname: email,wchat,dtalk
+      nodeid: "test_nodeid"
+      ruleid: 1
+      typeid: 1
+      userid: userid
+    annotations:
+      summary: "summary crule2"
+      description: "desc crule2"
