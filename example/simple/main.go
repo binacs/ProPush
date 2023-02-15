@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/BinacsLee/ProPush/collector"
+	"github.com/binacs/ProPush/collector"
 )
 
 func main() {

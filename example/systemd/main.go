@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/BinacsLee/ProPush/collector"
+	"github.com/binacs/ProPush/collector"
 )
 
 var job, instance, endpoint string

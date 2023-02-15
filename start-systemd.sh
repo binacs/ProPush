@@ -5,7 +5,7 @@ sudo cp ./bin/propushd /usr/sbin/propush
 cat <<EOF | sudo tee /etc/systemd/system/propush.service
 [Unit]
 Description=ProPush
-Documentation=https://github.com/BinacsLee/ProPush
+Documentation=https://github.com/binacs/ProPush
 
 [Service]
 ExecStart=/usr/sbin/propush \\
